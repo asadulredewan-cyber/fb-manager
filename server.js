@@ -41,23 +41,34 @@ const handleRoute = (importFn) => async (req, res) => {
   }
 };
 
-// Webhook ও API রাউটসমূহ
-app.all('/api/webhook/fb-listener', handleRoute(() => import('./api/webhook/fb-listener.js')));
+// --- ১. মেটা Webhook ভেরিফিকেশন (GET Request) ---
+app.get('/api/webhook/fb-listener', (req, res) => {
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
 
-// ড্যাশবোর্ড সামারি রুট (এটি মিসিং থাকার কারণে ৪০৪ আসছিল)
+  const expectedToken = process.env.META_WEBHOOK_VERIFY_TOKEN || process.env.FB_VERIFY_TOKEN;
+
+  if (mode === 'subscribe' && token === expectedToken) {
+    console.log('Webhook verified successfully by Meta!');
+    return res.status(200).send(challenge);
+  }
+  
+  console.warn('Webhook verification token mismatch:', { received: token, expected: expectedToken });
+  return res.status(403).send('Verification failed');
+});
+
+// --- ২. ইনকামিং মেসেজ ও কমেন্ট ইভেন্ট (POST Request) ---
+app.post('/api/webhook/fb-listener', handleRoute(() => import('./api/webhook/fb-listener.js')));
+
+// অন্যান্য এপিআই রাউটসমূহ
 app.all('/api/dashboard/summary', handleRoute(() => import('./api/dashboard/summary.js')));
-
-// কমেন্ট ও মেসেজ রুট
 app.all('/api/comments/comment-action', handleRoute(() => import('./api/comments/comment-action.js')));
 app.all('/api/comments/get-comments', handleRoute(() => import('./api/comments/get-comments.js')));
 app.all('/api/messages/get-messages', handleRoute(() => import('./api/messages/get-messages.js')));
 app.all('/api/messages/send-reply', handleRoute(() => import('./api/messages/send-reply.js')));
-
-// অথেন্টিকেশন রুট
 app.all('/api/auth/fb-exchange-token', handleRoute(() => import('./api/auth/fb-exchange-token.js')));
 app.all('/api/auth/verify-admin', handleRoute(() => import('./api/auth/verify-admin.js')));
-
-// পোস্ট সম্পর্কিত রুট
 app.all('/api/posts/get-posts', handleRoute(() => import('./api/posts/get-posts.js')));
 app.all('/api/posts/manual-schedule', handleRoute(() => import('./api/posts/manual-schedule.js')));
 app.all('/api/posts/generate-image', handleRoute(() => import('./api/posts/generate-image.js')));
