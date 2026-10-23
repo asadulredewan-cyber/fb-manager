@@ -2,7 +2,6 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// সেফ ইমপোর্ট হেল্পার
 const loadHandler = async (modulePromise) => {
   try {
     const mod = await modulePromise;
@@ -44,19 +43,32 @@ const handleRoute = (importFn) => async (req, res) => {
 
 // Webhook ও API রাউটসমূহ
 app.all('/api/webhook/fb-listener', handleRoute(() => import('./api/webhook/fb-listener.js')));
+
+// ড্যাশবোর্ড সামারি রুট (এটি মিসিং থাকার কারণে ৪০৪ আসছিল)
+app.all('/api/dashboard/summary', handleRoute(() => import('./api/dashboard/summary.js')));
+
+// কমেন্ট ও মেসেজ রুট
 app.all('/api/comments/comment-action', handleRoute(() => import('./api/comments/comment-action.js')));
 app.all('/api/comments/get-comments', handleRoute(() => import('./api/comments/get-comments.js')));
 app.all('/api/messages/get-messages', handleRoute(() => import('./api/messages/get-messages.js')));
 app.all('/api/messages/send-reply', handleRoute(() => import('./api/messages/send-reply.js')));
+
+// অথেন্টিকেশন রুট
 app.all('/api/auth/fb-exchange-token', handleRoute(() => import('./api/auth/fb-exchange-token.js')));
 app.all('/api/auth/verify-admin', handleRoute(() => import('./api/auth/verify-admin.js')));
+
+// পোস্ট সম্পর্কিত রুট
+app.all('/api/posts/get-posts', handleRoute(() => import('./api/posts/get-posts.js')));
+app.all('/api/posts/manual-schedule', handleRoute(() => import('./api/posts/manual-schedule.js')));
+app.all('/api/posts/generate-image', handleRoute(() => import('./api/posts/generate-image.js')));
+app.all('/api/scheduler/check-and-post', handleRoute(() => import('./api/scheduler/check-and-post.js')));
 
 // হোমপেজ
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// হেলথ চেক রুট (UptimeRobot / Cron-job এর জন্য)
+// হেলথ চেক রুট
 app.get('/health', (req, res) => {
   res.status(200).send('OK');
 });
