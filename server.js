@@ -2,14 +2,16 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// API হ্যান্ডলারগুলো ইমপোর্ট করুন
-import fbListenerHandler from './api/webhook/fb-listener.js';
-import commentActionHandler from './api/comments/comment-action.js';
-import getCommentsHandler from './api/comments/get-comments.js';
-import getMessagesHandler from './api/messages/get-messages.js';
-import sendReplyHandler from './api/messages/send-reply.js';
-import fbExchangeTokenHandler from './api/auth/fb-exchange-token.js';
-import verifyAdminHandler from './api/auth/verify-admin.js';
+// সেফ ইমপোর্ট হেল্পার
+const loadHandler = async (modulePromise) => {
+  try {
+    const mod = await modulePromise;
+    return mod.default || mod;
+  } catch (err) {
+    console.error('Module load error:', err.message);
+    return null;
+  }
+};
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,41 +19,46 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// বডি পার্সিং
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// স্ট্যাটিক ফাইল পরিবেশন (ড্যাশবোর্ড ও ফ্রন্টএন্ড UI)
+// স্ট্যাটিক ফ্রন্টএন্ড ফাইল
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Vercel ফাংশনগুলোকে Express রুটে র‍্যাপ করার হেল্পার
-const adaptVercelHandler = (handler) => async (req, res) => {
+// রুট র‍্যাপার
+const handleRoute = (importFn) => async (req, res) => {
   try {
-    await handler(req, res);
-  } catch (error) {
-    console.error('API Error:', error);
+    const handler = await loadHandler(importFn());
+    if (typeof handler === 'function') {
+      await handler(req, res);
+    } else {
+      res.status(500).json({ error: 'Handler not found or failed to load' });
+    }
+  } catch (err) {
+    console.error('Request Error:', err);
     if (!res.headersSent) {
       res.status(500).json({ error: 'Internal Server Error' });
     }
   }
 };
 
-// Webhook রুট (মেটা ফেসবুক এখান থেকেই কল করবে)
-app.all('/api/webhook/fb-listener', adaptVercelHandler(fbListenerHandler));
+// Webhook ও API রাউটসমূহ
+app.all('/api/webhook/fb-listener', handleRoute(() => import('./api/webhook/fb-listener.js')));
+app.all('/api/comments/comment-action', handleRoute(() => import('./api/comments/comment-action.js')));
+app.all('/api/comments/get-comments', handleRoute(() => import('./api/comments/get-comments.js')));
+app.all('/api/messages/get-messages', handleRoute(() => import('./api/messages/get-messages.js')));
+app.all('/api/messages/send-reply', handleRoute(() => import('./api/messages/send-reply.js')));
+app.all('/api/auth/fb-exchange-token', handleRoute(() => import('./api/auth/fb-exchange-token.js')));
+app.all('/api/auth/verify-admin', handleRoute(() => import('./api/auth/verify-admin.js')));
 
-// কমেন্ট ও মেসেজ রুট
-app.all('/api/comments/comment-action', adaptVercelHandler(commentActionHandler));
-app.all('/api/comments/get-comments', adaptVercelHandler(getCommentsHandler));
-app.all('/api/messages/get-messages', adaptVercelHandler(getMessagesHandler));
-app.all('/api/messages/send-reply', adaptVercelHandler(sendReplyHandler));
-
-// অথেন্টিকেশন রুট
-app.all('/api/auth/fb-exchange-token', adaptVercelHandler(fbExchangeTokenHandler));
-app.all('/api/auth/verify-admin', adaptVercelHandler(verifyAdminHandler));
-
-// ফ্রন্টএন্ড হোমপেজ
+// হোমপেজ
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// হেলথ চেক রুট (UptimeRobot / Cron-job এর জন্য)
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
 });
 
 app.listen(PORT, () => {
