@@ -1,0 +1,10 @@
+import express from "express";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+const app=express(),root=path.dirname(fileURLToPath(import.meta.url));
+app.use(express.json({limit:"2mb",verify:(req,res,buf)=>{req.rawBody=Buffer.from(buf);}}));
+app.use(express.urlencoded({extended:false,verify:(req,res,buf)=>{req.rawBody=Buffer.from(buf);}}));
+app.use(express.static(path.join(root,"public")));
+app.all(/^\/api\/.*/,async(req,res,next)=>{try{const rel=req.path.slice(5).replace(/\.\.+/g,"");const target=path.resolve(root,"api",`${rel}.js`);if(!target.startsWith(path.resolve(root,"api")+path.sep))return res.status(400).json({success:false,error:"Invalid route"});const mod=await import(new URL(`file://${target}`).href);return await mod.default(req,res);}catch(e){if(res.headersSent){console.error("API error after response:",e);return;}console.error("API route error:",e);return res.status(500).json({success:false,error:"Internal server error"});}});
+app.get("/health",(req,res)=>res.json({ok:true,service:"my-fb-autopilot",time:new Date().toISOString()}));
+const port=Number(process.env.PORT||3000);app.listen(port,"0.0.0.0",()=>console.log(`My FB Autopilot listening on ${port}`));
